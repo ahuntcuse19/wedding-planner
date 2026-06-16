@@ -49,7 +49,7 @@ export default function CrudList({
 
   function formatValue(item: Row, f: Field): React.ReactNode {
     const v = item[f.key];
-    if (f.type === "boolean") return v ? "Paid" : "Unpaid";
+    if (f.type === "boolean") return v ? (f.trueLabel ?? "Yes") : (f.falseLabel ?? "No");
     if (v === null || v === undefined || v === "") return "—";
     if (f.type === "money") return money(Number(v));
     if (f.type === "select") {

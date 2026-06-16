@@ -34,6 +34,12 @@ export interface Field {
   type: FieldType;
   options?: Option[];
   required?: boolean;
+  // Numeric fields backed by a nullable column: empty input stores null instead
+  // of 0. Leave false for non-nullable columns (e.g. capacity, estCost).
+  nullable?: boolean;
+  // Display text for a boolean field's true/false states (default Yes/No).
+  trueLabel?: string;
+  falseLabel?: string;
   help?: string;
   placeholder?: string;
   // Show this field as a column/primary line in the compact list view.
@@ -95,8 +101,8 @@ export const SCHEMAS: Record<EntitySlug, EntitySchema> = {
       { key: "item", label: "Item", type: "text", required: true, inList: true },
       { key: "category", label: "Category", type: "text", inList: true },
       { key: "estCost", label: "Estimated cost", type: "money", inList: true },
-      { key: "actualCost", label: "Actual cost", type: "money", inList: true },
-      { key: "paid", label: "Paid", type: "boolean", inList: true },
+      { key: "actualCost", label: "Actual cost", type: "money", nullable: true, inList: true },
+      { key: "paid", label: "Paid", type: "boolean", trueLabel: "Paid", falseLabel: "Unpaid", inList: true },
       { key: "notes", label: "Notes", type: "textarea" },
     ],
   },
@@ -131,7 +137,7 @@ export const SCHEMAS: Record<EntitySlug, EntitySchema> = {
       { key: "name", label: "Name", type: "text", required: true, inList: true },
       { key: "category", label: "Category", type: "text", inList: true },
       { key: "status", label: "Status", type: "select", options: opt(VENDOR_STATUSES), inList: true },
-      { key: "cost", label: "Cost", type: "money", inList: true },
+      { key: "cost", label: "Cost", type: "money", nullable: true, inList: true },
       { key: "contact", label: "Contact", type: "text" },
       { key: "url", label: "Website", type: "url" },
       { key: "notes", label: "Notes", type: "textarea" },
@@ -149,7 +155,7 @@ export const SCHEMAS: Record<EntitySlug, EntitySchema> = {
       { key: "status", label: "Status", type: "select", options: opt(VENUE_STATUSES), inList: true },
       { key: "capacity", label: "Capacity", type: "number", inList: true },
       { key: "estCost", label: "Estimated cost", type: "money", inList: true },
-      { key: "pricePerHead", label: "Price per head", type: "money" },
+      { key: "pricePerHead", label: "Price per head", type: "money", nullable: true },
       { key: "url", label: "Website", type: "url" },
       { key: "contact", label: "Contact", type: "text" },
       { key: "pros", label: "Pros", type: "textarea" },
@@ -173,11 +179,14 @@ export function sanitize(
     switch (field.type) {
       case "number":
       case "money": {
+        // Empty (or non-numeric) → null only for nullable columns, else 0, so we
+        // never send null into a non-nullable Int column.
+        const fallback = field.nullable ? null : 0;
         if (raw === "" || raw === null || raw === undefined) {
-          out[field.key] = field.required ? 0 : null;
+          out[field.key] = fallback;
         } else {
           const n = Number(raw);
-          out[field.key] = Number.isFinite(n) ? Math.round(n) : field.required ? 0 : null;
+          out[field.key] = Number.isFinite(n) ? Math.round(n) : fallback;
         }
         break;
       }

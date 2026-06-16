@@ -19,7 +19,12 @@ export async function POST(req: Request) {
     data: { venue: venue.name, location: venue.location },
   });
 
-  // Promote the chosen venue to Booked, leave the others as-is.
+  // Demote any previously-Booked venue, then promote the chosen one — only one
+  // venue should ever read as Booked.
+  await prisma.venue.updateMany({
+    where: { status: "Booked", id: { not: venue.id } },
+    data: { status: "Toured" },
+  });
   await prisma.venue.update({ where: { id: venue.id }, data: { status: "Booked" } });
 
   const capacityWarning =
