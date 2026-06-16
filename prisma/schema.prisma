@@ -1,0 +1,107 @@
+// Wedding Planner data model.
+// SQLite via Prisma. Enums are stored as strings (SQLite has no native enums);
+// allowed values live in lib/schemas.ts so the UI, API, and DB agree on one source.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Singleton settings row (always id = 1). Drives the header, countdown,
+/// budget range, guest target, partner names/emails, and chosen venue.
+model Config {
+  id            Int      @id @default(autoincrement())
+  date          String // ISO yyyy-mm-dd — the wedding date
+  backupDate    String? // optional backup/rain date
+  location      String   @default("")
+  venue         String   @default("")
+  guestTarget   Int      @default(100)
+  budgetMin     Int      @default(0)
+  budgetMax     Int      @default(0)
+  partner1Name  String   @default("Katie")
+  partner2Name  String   @default("Me")
+  partner1Email String?
+  partner2Email String?
+  updatedAt     DateTime @updatedAt
+}
+
+model BudgetLine {
+  id         Int      @id @default(autoincrement())
+  category   String   @default("")
+  item       String
+  estCost    Int      @default(0)
+  actualCost Int?
+  paid       Boolean  @default(false)
+  notes      String   @default("")
+  createdAt  DateTime @default(now())
+}
+
+model Guest {
+  id        Int      @id @default(autoincrement())
+  name      String
+  party     String   @default("") // household / group
+  side      String   @default("Both") // Partner1 / Partner2 / Both
+  rsvp      String   @default("Pending") // Pending / Yes / No / Maybe
+  email     String?
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model Task {
+  id        Int      @id @default(autoincrement())
+  title     String
+  owner     String   @default("Both") // Partner1 / Partner2 / Both / Coordinator / Vendor
+  due       String? // ISO yyyy-mm-dd
+  status    String   @default("Todo") // Todo / Doing / Done
+  category  String   @default("")
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model Vendor {
+  id        Int      @id @default(autoincrement())
+  name      String
+  category  String   @default("")
+  status    String   @default("Researching") // Researching / Contacted / Booked / Declined
+  cost      Int?
+  contact   String   @default("")
+  url       String   @default("")
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model Venue {
+  id           Int      @id @default(autoincrement())
+  name         String
+  location     String   @default("")
+  lat          Float?
+  lng          Float?
+  capacity     Int      @default(0)
+  estCost      Int      @default(0)
+  pricePerHead Int?
+  status       String   @default("Considering") // Considering / Shortlist / Toured / Booked
+  url          String   @default("")
+  contact      String   @default("")
+  pros         String   @default("")
+  cons         String   @default("")
+  notes        String   @default("")
+  source       String   @default("manual") // manual / google_places
+  createdAt    DateTime @default(now())
+}
+
+/// History of sent digests — prevents double-sends and powers "changed since
+/// last digest" by diffing the stored metrics snapshot.
+model EmailLog {
+  id         Int      @id @default(autoincrement())
+  sentAt     DateTime @default(now())
+  type       String // manual / weekly
+  recipients String // comma-separated
+  subject    String
+  status     String   @default("sent") // sent / failed / skipped
+  error      String?
+  snapshot   String   @default("{}") // JSON metrics for change detection
+}
