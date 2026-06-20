@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+/* Theme tokens mirrored from lib/theme.ts as CSS variables. */
+:root {
+  --c-bg: #faf6f0;
+  --c-surface: #ffffff;
+  --c-surface-alt: #f4ece2;
+  --c-border: #e7dccd;
+  --c-ink: #3a342e;
+  --c-ink-soft: #7a6f63;
+  --c-primary: #a8755f;
+  --c-primary-soft: #f1e2db;
+  --c-accent: #6f7f63;
+  --c-danger: #b24a40;
+  --font-display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+}
+
+@theme inline {
+  --color-bg: var(--c-bg);
+  --color-surface: var(--c-surface);
+  --color-ink: var(--c-ink);
+  --color-primary: var(--c-primary);
+}
+
+html {
+  background: var(--c-bg);
+  color: var(--c-ink);
+}
+
+body {
+  background: var(--c-bg);
+  color: var(--c-ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+/* Visible keyboard focus everywhere (accessibility requirement). */
+:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
