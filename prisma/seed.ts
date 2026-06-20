@@ -16,7 +16,7 @@ async function main() {
     data: {
       date: "2027-04-17",
       backupDate: "2027-04-24",
-      location: "",
+      location: "Stanfordville, New York",
       venue: "",
       guestTarget: 110,
       budgetMin: 25000,
