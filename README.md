@@ -141,8 +141,8 @@ on every deploy.
 
    | Variable | Value |
    | --- | --- |
-   | `DATABASE_URL` | pooled Postgres URL (Vercel Postgres: `POSTGRES_PRISMA_URL`) |
-   | `DIRECT_URL` | direct Postgres URL (Vercel Postgres: `POSTGRES_URL_NON_POOLING`) |
+   | `DATABASE_URL` | Postgres URL (Vercel Postgres: `POSTGRES_PRISMA_URL`) |
+   | `DIRECT_URL` | _optional_ — direct URL for migrations (Vercel Postgres: `POSTGRES_URL_NON_POOLING`); defaults to `DATABASE_URL` |
    | `RESEND_API_KEY` | your Resend key (optional — blank disables email) |
    | `EMAIL_FROM` | verified sender, or `onboarding@resend.dev` |
    | `CRON_SECRET` | `openssl rand -hex 32` (required for the weekly digest) |
@@ -173,8 +173,8 @@ on every deploy.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | yes | Pooled Postgres connection (runtime) |
-| `DIRECT_URL` | yes | Direct Postgres connection (migrations) |
+| `DATABASE_URL` | yes | Postgres connection (runtime); pooled is serverless-safe |
+| `DIRECT_URL` | no | Direct connection for migrations; defaults to `DATABASE_URL` if unset |
 | `RESEND_API_KEY` | for email | Resend API key; blank = email disabled |
 | `EMAIL_FROM` | for email | Verified/sandbox sender address |
 | `CRON_SECRET` | for weekly digest | Shared secret protecting the cron route |
