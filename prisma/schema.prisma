@@ -27,6 +27,7 @@ model Config {
   partner2Name  String   @default("Me")
   partner1Email String?
   partner2Email String?
+  chosenVenueId Int? // id of the Venue chosen via "Set as our venue"
   updatedAt     DateTime @updatedAt
 }
 

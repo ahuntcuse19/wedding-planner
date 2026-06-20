@@ -19,9 +19,10 @@ export function useConfig() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
-    const updated = await res.json();
+    if (!res.ok) throw new Error(`Failed to save settings (${res.status})`);
+    const updated = (await res.json()) as Config;
     await mutate(updated, { revalidate: false });
-    return updated as Config;
+    return updated;
   }
 
   return { config: data, isLoading, error, update, refresh: mutate };

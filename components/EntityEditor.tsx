@@ -50,14 +50,19 @@ export default function EntityEditor({
     return v;
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const set = (key: string, val: unknown) => setValues((p) => ({ ...p, [key]: val }));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setError(null);
     try {
       await onSubmit(values);
+    } catch (err) {
+      // Keep the modal open and show why the save failed.
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -117,6 +122,11 @@ export default function EntityEditor({
           );
         })}
       </div>
+      {error && (
+        <div role="alert" style={{ color: C.danger, fontSize: 13, fontWeight: 600, marginTop: 14 }}>
+          {error}
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 22 }}>
         <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel

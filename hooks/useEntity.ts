@@ -16,25 +16,28 @@ export function useEntity<T extends { id: number }>(slug: EntitySlug) {
   const { data, error, isLoading, mutate } = useSWR<T[]>(key, fetcher);
 
   async function create(values: Partial<T>) {
-    await fetch(key, {
+    const res = await fetch(key, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
+    if (!res.ok) throw new Error(`Failed to create (${res.status})`);
     await mutate();
   }
 
   async function update(id: number, values: Partial<T>) {
-    await fetch(`${key}/${id}`, {
+    const res = await fetch(`${key}/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
+    if (!res.ok) throw new Error(`Failed to update (${res.status})`);
     await mutate();
   }
 
   async function remove(id: number) {
-    await fetch(`${key}/${id}`, { method: "DELETE" });
+    const res = await fetch(`${key}/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`Failed to delete (${res.status})`);
     await mutate();
   }
 

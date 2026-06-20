@@ -67,36 +67,44 @@ export default function VenuesPage() {
   }
 
   async function saveResult(res: SearchResult) {
-    await create({
-      name: res.name,
-      location: res.location,
-      lat: res.lat,
-      lng: res.lng,
-      url: res.url,
-      status: "Considering",
-      source: res.source,
-    } as Partial<Venue>);
-    setNotice(`Saved “${res.name}” to your venues.`);
+    try {
+      await create({
+        name: res.name,
+        location: res.location,
+        lat: res.lat,
+        lng: res.lng,
+        url: res.url,
+        status: "Considering",
+        source: res.source,
+      } as Partial<Venue>);
+      setNotice(`Saved “${res.name}” to your venues.`);
+    } catch {
+      setNotice(`Could not save “${res.name}”. Please try again.`);
+    }
   }
 
   async function setAsVenue(v: Venue) {
-    const r = await fetch("/api/venues/choose", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ venueId: v.id }),
-    });
-    const d = await r.json();
-    await refresh();
-    await refreshConfig();
-    setNotice(
-      d.capacityWarning
-        ? `${v.name} set as your venue. ⚠ ${d.capacityWarning}`
-        : `${v.name} set as your venue.`,
-    );
+    try {
+      const r = await fetch("/api/venues/choose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ venueId: v.id }),
+      });
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      await refresh();
+      await refreshConfig();
+      setNotice(
+        d.capacityWarning
+          ? `${v.name} set as your venue. ⚠ ${d.capacityWarning}`
+          : `${v.name} set as your venue.`,
+      );
+    } catch {
+      setNotice(`Could not set ${v.name} as your venue. Please try again.`);
+    }
   }
 
   const venues = data.filter((v) => statusFilter === "all" || v.status === statusFilter);
-  const chosenName = config?.venue;
 
   return (
     <div>
@@ -172,7 +180,7 @@ export default function VenuesPage() {
       ) : (
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))" }}>
           {venues.map((v) => {
-            const isChosen = chosenName && v.name === chosenName;
+            const isChosen = config?.chosenVenueId === v.id;
             const tooSmall = v.capacity > 0 && guestTarget > 0 && v.capacity < guestTarget;
             return (
               <Card key={v.id} style={{ borderColor: isChosen ? C.primary : C.border, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -207,7 +215,7 @@ export default function VenuesPage() {
                   )}
                   <div style={{ flex: 1 }} />
                   <Button variant="ghost" onClick={() => setEditing(v)}>Edit</Button>
-                  <Button variant="danger" onClick={() => { if (confirm("Delete this venue?")) remove(v.id); }}>Delete</Button>
+                  <Button variant="danger" onClick={async () => { if (!confirm("Delete this venue?")) return; try { await remove(v.id); } catch { setNotice("Could not delete this venue. Please try again."); } }}>Delete</Button>
                 </div>
               </Card>
             );

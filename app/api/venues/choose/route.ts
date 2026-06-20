@@ -16,7 +16,8 @@ export async function POST(req: Request) {
 
   const updatedConfig = await prisma.config.update({
     where: { id: config.id },
-    data: { venue: venue.name, location: venue.location },
+    // Store the id (stable link) plus name/location for the header display.
+    data: { venue: venue.name, location: venue.location, chosenVenueId: venue.id },
   });
 
   // Demote any previously-Booked venue, then promote the chosen one — only one

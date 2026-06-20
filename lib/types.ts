@@ -14,6 +14,7 @@ export interface Config {
   partner2Name: string;
   partner1Email: string | null;
   partner2Email: string | null;
+  chosenVenueId: number | null;
   updatedAt: string;
 }
 

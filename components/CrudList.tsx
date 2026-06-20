@@ -100,8 +100,13 @@ export default function CrudList({
                   </Button>
                   <Button
                     variant="danger"
-                    onClick={() => {
-                      if (confirm(`Delete this ${schema.singular.toLowerCase()}?`)) remove(item.id);
+                    onClick={async () => {
+                      if (!confirm(`Delete this ${schema.singular.toLowerCase()}?`)) return;
+                      try {
+                        await remove(item.id);
+                      } catch {
+                        alert(`Could not delete this ${schema.singular.toLowerCase()}. Please try again.`);
+                      }
                     }}
                   >
                     Delete
