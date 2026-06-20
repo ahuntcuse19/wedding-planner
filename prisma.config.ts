@@ -11,13 +11,6 @@ try {
   // .env is optional in some environments (e.g. CI / Vercel set vars directly).
 }
 
-// DIRECT_URL (used for migrations) is optional: default it to DATABASE_URL when
-// unset so deployments only need to configure a single connection string. Set a
-// distinct DIRECT_URL when using a pooled DATABASE_URL (e.g. Neon -pooler).
-if (!process.env.DIRECT_URL && process.env.DATABASE_URL) {
-  process.env.DIRECT_URL = process.env.DATABASE_URL;
-}
-
 export default defineConfig({
   schema: path.join("prisma", "schema.prisma"),
   migrations: {

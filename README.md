@@ -30,14 +30,14 @@ easiest local database is a free **Neon** branch — no install required.
 
 ```bash
 npm install
-cp .env.example .env        # set DATABASE_URL + DIRECT_URL (Neon), then other keys
+cp .env.example .env        # set DATABASE_URL (Neon), then other keys
 npx prisma migrate deploy   # apply migrations to your database
 npm run seed                # load sample guests, budget, tasks, vendors, venues
 npm run dev                 # http://localhost:3000
 ```
 
-- `DATABASE_URL` = Neon **pooled** connection (the `-pooler` host).
-- `DIRECT_URL` = Neon **direct** connection (used for migrations).
+- `DATABASE_URL` = Neon **direct** (non-pooled) connection — used for both runtime
+  and migrations. (Pooled `-pooler` endpoints can't run migrations.)
 
 The app runs fully **without any email/search API keys** — those features stay
 disabled (and say so) until you add keys.
@@ -131,7 +131,7 @@ externalizes Prisma for serverless, and the `vercel-build` script runs
 on every deploy.
 
 1. **Database** — create a Postgres database:
-   - **Neon**: create a project, grab the pooled + direct connection strings.
+   - **Neon**: create a project, grab the **direct** (non-pooled) connection string.
    - **Vercel Postgres**: add it from the project's Storage tab — it injects
      `POSTGRES_*` env vars automatically.
 2. **Import the repo** into Vercel (New Project → pick this Git repo). Framework
@@ -141,8 +141,7 @@ on every deploy.
 
    | Variable | Value |
    | --- | --- |
-   | `DATABASE_URL` | Postgres URL (Vercel Postgres: `POSTGRES_PRISMA_URL`) |
-   | `DIRECT_URL` | _optional_ — direct URL for migrations (Vercel Postgres: `POSTGRES_URL_NON_POOLING`); defaults to `DATABASE_URL` |
+   | `DATABASE_URL` | direct Postgres URL (Vercel Postgres: `POSTGRES_URL_NON_POOLING`) |
    | `RESEND_API_KEY` | your Resend key (optional — blank disables email) |
    | `EMAIL_FROM` | verified sender, or `onboarding@resend.dev` |
    | `CRON_SECRET` | `openssl rand -hex 32` (required for the weekly digest) |
@@ -150,7 +149,7 @@ on every deploy.
 
 4. **Deploy.** `vercel-build` applies migrations automatically. Migrations do **not**
    seed — run the seed once against the production DB if you want sample data:
-   `DATABASE_URL=<prod-url> DIRECT_URL=<prod-direct-url> npm run seed` (or just add
+   `DATABASE_URL=<prod-url> npm run seed` (or just add
    your real data through the UI).
 5. The weekly digest fires Sundays 18:00 **UTC** — adjust the schedule in
    `vercel.json` for your timezone.
@@ -173,8 +172,7 @@ on every deploy.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | yes | Postgres connection (runtime); pooled is serverless-safe |
-| `DIRECT_URL` | no | Direct connection for migrations; defaults to `DATABASE_URL` if unset |
+| `DATABASE_URL` | yes | Direct Postgres connection (runtime + migrations) |
 | `RESEND_API_KEY` | for email | Resend API key; blank = email disabled |
 | `EMAIL_FROM` | for email | Verified/sandbox sender address |
 | `CRON_SECRET` | for weekly digest | Shared secret protecting the cron route |
