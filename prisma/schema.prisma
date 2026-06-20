@@ -1,14 +1,15 @@
 // Wedding Planner data model.
-// SQLite via Prisma. Enums are stored as strings (SQLite has no native enums);
-// allowed values live in lib/schemas.ts so the UI, API, and DB agree on one source.
+// Postgres via Prisma. "Enum" fields are stored as plain strings; the allowed
+// values live in lib/schemas.ts so the UI, API, and DB agree on one source.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 /// Singleton settings row (always id = 1). Drives the header, countdown,

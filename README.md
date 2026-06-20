@@ -3,7 +3,8 @@
 A full-stack wedding-planning app: venues, guests, budget, timeline, vendors, a
 chosen-venue–driven location, partner task assignment, and emailed digests.
 
-Built with **Next.js (App Router) + TypeScript + Tailwind + SQLite (Prisma) + Resend**.
+Built with **Next.js (App Router) + TypeScript + Tailwind + Postgres (Prisma) + Resend**,
+deployable to **Vercel**.
 
 ## Architecture (the anti-tech-debt core)
 
@@ -19,20 +20,33 @@ Built with **Next.js (App Router) + TypeScript + Tailwind + SQLite (Prisma) + Re
   uses the same schema to sanitize input. Add a field once → it appears in the
   form, the list, and the API.
 
-## Setup
+## Setup (local)
+
+The app uses **Postgres** (so it runs the same locally and on Vercel). The
+easiest local database is a free **Neon** branch — no install required.
+
+1. Create a project at <https://neon.tech> and copy its connection strings.
+2. Configure env and run:
 
 ```bash
 npm install
-cp .env.example .env        # then fill in values as needed (see below)
-npx prisma migrate dev      # create the SQLite database + tables
+cp .env.example .env        # set DATABASE_URL + DIRECT_URL (Neon), then other keys
+npx prisma migrate deploy   # apply migrations to your database
 npm run seed                # load sample guests, budget, tasks, vendors, venues
 npm run dev                 # http://localhost:3000
 ```
 
-The app runs fully **without any API keys** — email sending and live venue search
-simply stay disabled (and say so) until you add keys.
+- `DATABASE_URL` = Neon **pooled** connection (the `-pooler` host).
+- `DIRECT_URL` = Neon **direct** connection (used for migrations).
+
+The app runs fully **without any email/search API keys** — those features stay
+disabled (and say so) until you add keys.
 
 To reset the database to seed state at any time: `npm run db:reset`.
+
+> Prefer SQLite for purely-local work? You can switch `provider` back to
+> `"sqlite"` in `prisma/schema.prisma` and use `DATABASE_URL="file:./dev.db"`,
+> but Vercel's serverless filesystem is ephemeral, so production needs Postgres.
 
 ## Modules
 
@@ -82,12 +96,11 @@ The weekly digest is a protected route: `GET /api/cron/digest`. It requires
 `Authorization: Bearer <CRON_SECRET>` or `?secret=<CRON_SECRET>`. It also guards
 against double-sends within the same day. **Default cadence: Sunday 18:00.**
 
-**Option A — Vercel Cron** (when deployed to Vercel). Add `vercel.json`:
+**Option A — Vercel Cron** (when deployed to Vercel). Already wired in
+`vercel.json`:
 
 ```json
-{
-  "crons": [{ "path": "/api/cron/digest", "schedule": "0 18 * * 0" }]
-}
+{ "crons": [{ "path": "/api/cron/digest", "schedule": "0 18 * * 0" }] }
 ```
 
 Set `CRON_SECRET` in the Vercel project env. Vercel Cron automatically sends
@@ -110,22 +123,58 @@ cron.schedule("0 18 * * 0", () => {
 });
 ```
 
+## Deploy to Vercel
+
+The repo is Vercel-ready: `vercel.json` registers the weekly cron, `next.config.ts`
+externalizes Prisma for serverless, and the `vercel-build` script runs
+`prisma generate && prisma migrate deploy && next build` so the schema is applied
+on every deploy.
+
+1. **Database** — create a Postgres database:
+   - **Neon**: create a project, grab the pooled + direct connection strings.
+   - **Vercel Postgres**: add it from the project's Storage tab — it injects
+     `POSTGRES_*` env vars automatically.
+2. **Import the repo** into Vercel (New Project → pick this Git repo). Framework
+   auto-detects as Next.js.
+3. **Set environment variables** in the Vercel project (Settings → Environment
+   Variables):
+
+   | Variable | Value |
+   | --- | --- |
+   | `DATABASE_URL` | pooled Postgres URL (Vercel Postgres: `POSTGRES_PRISMA_URL`) |
+   | `DIRECT_URL` | direct Postgres URL (Vercel Postgres: `POSTGRES_URL_NON_POOLING`) |
+   | `RESEND_API_KEY` | your Resend key (optional — blank disables email) |
+   | `EMAIL_FROM` | verified sender, or `onboarding@resend.dev` |
+   | `CRON_SECRET` | `openssl rand -hex 32` (required for the weekly digest) |
+   | `VENUE_SEARCH_ENABLED` / `PLACES_API_KEY` | optional venue search |
+
+4. **Deploy.** `vercel-build` applies migrations automatically. Migrations do **not**
+   seed — run the seed once against the production DB if you want sample data:
+   `DATABASE_URL=<prod-url> DIRECT_URL=<prod-direct-url> npm run seed` (or just add
+   your real data through the UI).
+5. The weekly digest fires Sundays 18:00 **UTC** — adjust the schedule in
+   `vercel.json` for your timezone.
+
+> Note: SQLite can't be used in production — Vercel's serverless filesystem is
+> ephemeral and read-only, so the app uses Postgres everywhere.
+
 ## Costs
 
-- **Resend** — free tier is ~3,000 emails/month (100/day), plenty for two
-  recipients. Paid tiers only matter at volume. No verified domain needed for the
-  sandbox sender.
+- **Postgres (Neon / Vercel Postgres)** — both have free tiers that comfortably
+  cover a single wedding's data. Neon's free branch is enough for local + prod.
+- **Resend** — free tier ~3,000 emails/month (100/day), plenty for two recipients.
+  No verified domain needed for the sandbox sender.
 - **Google Places API (New)** — pay-as-you-go with a recurring free credit, but
   **Text Search is billed per request** beyond the free allotment. Keep
-  `VENUE_SEARCH_ENABLED="false"` if you don't want any Places billing. Set quotas
-  in Google Cloud to cap spend.
-- **SQLite / Prisma / Next.js** — free and local.
+  `VENUE_SEARCH_ENABLED="false"` to avoid any Places billing; set quotas to cap spend.
+- **Vercel / Prisma / Next.js** — Vercel's Hobby tier is free for personal projects.
 
 ## Environment variables
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | yes | SQLite file path for Prisma |
+| `DATABASE_URL` | yes | Pooled Postgres connection (runtime) |
+| `DIRECT_URL` | yes | Direct Postgres connection (migrations) |
 | `RESEND_API_KEY` | for email | Resend API key; blank = email disabled |
 | `EMAIL_FROM` | for email | Verified/sandbox sender address |
 | `CRON_SECRET` | for weekly digest | Shared secret protecting the cron route |
