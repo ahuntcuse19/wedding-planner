@@ -30,15 +30,15 @@ easiest local database is a free **Neon** branch — no install required.
 
 ```bash
 npm install
-cp .env.example .env        # set the POSTGRES_* vars (Neon), then other keys
+cp .env.example .env        # set DATABASE_URL (Neon/Supabase/etc.), then other keys
 npx prisma migrate deploy   # apply migrations to your database
 npm run seed                # load sample guests, budget, tasks, vendors, venues
 npm run dev                 # http://localhost:3000
 ```
 
-- `POSTGRES_PRISMA_URL` = pooled connection (runtime). `POSTGRES_URL_NON_POOLING`
-  = direct connection (migrations). Locally, set both to your Neon connection
-  string. These names match what Vercel's Postgres integration injects in prod.
+- `DATABASE_URL` = one Postgres connection string. Use your provider's **direct
+  (non-pooled)** URL — it works for both `prisma migrate deploy` (build) and
+  queries (runtime). Set the same variable in the Vercel dashboard.
 
 The app runs fully **without any email/search API keys** — those features stay
 disabled (and say so) until you add keys.
@@ -132,18 +132,18 @@ externalizes Prisma for serverless, and the `vercel-build` script runs
 `prisma generate && prisma migrate deploy && next build` so the schema is applied
 on every deploy.
 
-1. **Database** — add Postgres from the project's **Storage** tab (Vercel Postgres
-   or the Neon integration). It injects `POSTGRES_PRISMA_URL` and
-   `POSTGRES_URL_NON_POOLING` for **all** environments automatically — the schema
-   already reads those, so **no manual DB env vars are needed**. (Make sure the
-   store is connected to the **Preview** environment too, not just Production —
-   PR deploys are Preview builds.)
+1. **Database** — create a Postgres database (e.g. [Neon](https://neon.tech),
+   Supabase, or Vercel Postgres) and copy its **direct (non-pooled)** connection
+   string.
 2. **Import the repo** into Vercel (New Project → pick this Git repo). Framework
    auto-detects as Next.js.
-3. **Set the remaining environment variables** (Settings → Environment Variables):
+3. **Set the environment variables** (Settings → Environment Variables). Add
+   `DATABASE_URL` for **all** environments (Production, Preview, **and** Development —
+   PR deploys are Preview builds):
 
    | Variable | Value |
    | --- | --- |
+   | `DATABASE_URL` | your Postgres **direct** connection string (required) |
    | `RESEND_API_KEY` | your Resend key (optional — blank disables email) |
    | `EMAIL_FROM` | verified sender, or `onboarding@resend.dev` |
    | `CRON_SECRET` | `openssl rand -hex 32` (required for the weekly digest) |
@@ -151,8 +151,7 @@ on every deploy.
 
 4. **Deploy.** `vercel-build` applies migrations automatically. Migrations do **not**
    seed — run the seed once against the production DB if you want sample data:
-   `POSTGRES_PRISMA_URL=<url> POSTGRES_URL_NON_POOLING=<url> npm run seed` (or just
-   add your real data through the UI).
+   `DATABASE_URL=<url> npm run seed` (or just add your real data through the UI).
 5. The weekly digest fires Sundays 18:00 **UTC** — adjust the schedule in
    `vercel.json` for your timezone.
 
@@ -174,8 +173,7 @@ on every deploy.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `POSTGRES_PRISMA_URL` | yes | Pooled Postgres connection (runtime). Auto-set by Vercel Postgres. |
-| `POSTGRES_URL_NON_POOLING` | yes | Direct Postgres connection (migrations). Auto-set by Vercel Postgres. |
+| `DATABASE_URL` | yes | Postgres connection string (direct/non-pooled). Used for migrations and runtime. |
 | `RESEND_API_KEY` | for email | Resend API key; blank = email disabled |
 | `EMAIL_FROM` | for email | Verified/sandbox sender address |
 | `CRON_SECRET` | for weekly digest | Shared secret protecting the cron route |

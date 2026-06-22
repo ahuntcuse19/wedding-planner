@@ -7,12 +7,12 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  // Vercel's Postgres Storage integration injects these automatically.
-  // POSTGRES_PRISMA_URL = pooled (runtime); POSTGRES_URL_NON_POOLING = direct
-  // (migrations). Locally, set both to your Neon connection string.
-  url       = env("POSTGRES_PRISMA_URL")
-  directUrl = env("POSTGRES_URL_NON_POOLING")
+  provider = "postgresql"
+  // A single connection string you control. Use your database's DIRECT
+  // (non-pooled) connection URL — it works for both `prisma migrate deploy`
+  // at build time and queries at runtime. Set DATABASE_URL locally in .env
+  // and in the Vercel project's Environment Variables (all environments).
+  url      = env("DATABASE_URL")
 }
 
 /// Singleton settings row (always id = 1). Drives the header, countdown,
