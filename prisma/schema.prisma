@@ -7,8 +7,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Vercel's Postgres Storage integration injects these automatically.
+  // POSTGRES_PRISMA_URL = pooled (runtime); POSTGRES_URL_NON_POOLING = direct
+  // (migrations). Locally, set both to your Neon connection string.
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
 /// Singleton settings row (always id = 1). Drives the header, countdown,

@@ -30,14 +30,15 @@ easiest local database is a free **Neon** branch — no install required.
 
 ```bash
 npm install
-cp .env.example .env        # set DATABASE_URL (Neon), then other keys
+cp .env.example .env        # set the POSTGRES_* vars (Neon), then other keys
 npx prisma migrate deploy   # apply migrations to your database
 npm run seed                # load sample guests, budget, tasks, vendors, venues
 npm run dev                 # http://localhost:3000
 ```
 
-- `DATABASE_URL` = Neon **direct** (non-pooled) connection — used for both runtime
-  and migrations. (Pooled `-pooler` endpoints can't run migrations.)
+- `POSTGRES_PRISMA_URL` = pooled connection (runtime). `POSTGRES_URL_NON_POOLING`
+  = direct connection (migrations). Locally, set both to your Neon connection
+  string. These names match what Vercel's Postgres integration injects in prod.
 
 The app runs fully **without any email/search API keys** — those features stay
 disabled (and say so) until you add keys.
@@ -45,7 +46,8 @@ disabled (and say so) until you add keys.
 To reset the database to seed state at any time: `npm run db:reset`.
 
 > Prefer SQLite for purely-local work? You can switch `provider` back to
-> `"sqlite"` in `prisma/schema.prisma` and use `DATABASE_URL="file:./dev.db"`,
+> `"sqlite"` in `prisma/schema.prisma` and use a single `url = env("DATABASE_URL")`
+> with `DATABASE_URL="file:./dev.db"`,
 > but Vercel's serverless filesystem is ephemeral, so production needs Postgres.
 
 ## Modules
@@ -130,18 +132,18 @@ externalizes Prisma for serverless, and the `vercel-build` script runs
 `prisma generate && prisma migrate deploy && next build` so the schema is applied
 on every deploy.
 
-1. **Database** — create a Postgres database:
-   - **Neon**: create a project, grab the **direct** (non-pooled) connection string.
-   - **Vercel Postgres**: add it from the project's Storage tab — it injects
-     `POSTGRES_*` env vars automatically.
+1. **Database** — add Postgres from the project's **Storage** tab (Vercel Postgres
+   or the Neon integration). It injects `POSTGRES_PRISMA_URL` and
+   `POSTGRES_URL_NON_POOLING` for **all** environments automatically — the schema
+   already reads those, so **no manual DB env vars are needed**. (Make sure the
+   store is connected to the **Preview** environment too, not just Production —
+   PR deploys are Preview builds.)
 2. **Import the repo** into Vercel (New Project → pick this Git repo). Framework
    auto-detects as Next.js.
-3. **Set environment variables** in the Vercel project (Settings → Environment
-   Variables):
+3. **Set the remaining environment variables** (Settings → Environment Variables):
 
    | Variable | Value |
    | --- | --- |
-   | `DATABASE_URL` | direct Postgres URL (Vercel Postgres: `POSTGRES_URL_NON_POOLING`) |
    | `RESEND_API_KEY` | your Resend key (optional — blank disables email) |
    | `EMAIL_FROM` | verified sender, or `onboarding@resend.dev` |
    | `CRON_SECRET` | `openssl rand -hex 32` (required for the weekly digest) |
@@ -149,8 +151,8 @@ on every deploy.
 
 4. **Deploy.** `vercel-build` applies migrations automatically. Migrations do **not**
    seed — run the seed once against the production DB if you want sample data:
-   `DATABASE_URL=<prod-url> npm run seed` (or just add
-   your real data through the UI).
+   `POSTGRES_PRISMA_URL=<url> POSTGRES_URL_NON_POOLING=<url> npm run seed` (or just
+   add your real data through the UI).
 5. The weekly digest fires Sundays 18:00 **UTC** — adjust the schedule in
    `vercel.json` for your timezone.
 
@@ -172,7 +174,8 @@ on every deploy.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | yes | Direct Postgres connection (runtime + migrations) |
+| `POSTGRES_PRISMA_URL` | yes | Pooled Postgres connection (runtime). Auto-set by Vercel Postgres. |
+| `POSTGRES_URL_NON_POOLING` | yes | Direct Postgres connection (migrations). Auto-set by Vercel Postgres. |
 | `RESEND_API_KEY` | for email | Resend API key; blank = email disabled |
 | `EMAIL_FROM` | for email | Verified/sandbox sender address |
 | `CRON_SECRET` | for weekly digest | Shared secret protecting the cron route |
