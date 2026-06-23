@@ -129,3 +129,80 @@ export function Empty({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
+// Shimmer placeholder block. The `wp-shimmer` animation lives in globals.css
+// (and is disabled under prefers-reduced-motion there).
+export function Skeleton({
+  width = "100%",
+  height = 16,
+  radius = 8,
+  style,
+}: {
+  width?: number | string;
+  height?: number | string;
+  radius?: number;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        width,
+        height,
+        borderRadius: radius,
+        background: `linear-gradient(90deg, ${C.surfaceAlt} 25%, ${C.border} 37%, ${C.surfaceAlt} 63%)`,
+        backgroundSize: "400px 100%",
+        animation: "wp-shimmer 1.4s ease infinite",
+        ...style,
+      }}
+    />
+  );
+}
+
+// A few skeleton cards standing in for a loading list.
+export function SkeletonList({ rows = 3 }: { rows?: number }) {
+  return (
+    <div style={{ display: "grid", gap: 12 }} aria-busy="true" aria-label="Loading">
+      {Array.from({ length: rows }).map((_, i) => (
+        <Card key={i} style={{ padding: 16 }}>
+          <Skeleton width="40%" height={18} />
+          <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
+            <Skeleton width={90} height={13} />
+            <Skeleton width={70} height={13} />
+            <Skeleton width={110} height={13} />
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+// Inline error panel with an optional retry. Used when a data fetch fails.
+export function ErrorState({
+  message = "Couldn't load this. Check your connection and try again.",
+  onRetry,
+}: {
+  message?: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      style={{
+        textAlign: "center",
+        color: C.danger,
+        background: C.dangerSoft,
+        padding: "24px 16px",
+        border: `1px solid ${C.danger}`,
+        borderRadius: 14,
+      }}
+    >
+      <div style={{ fontWeight: 600, marginBottom: onRetry ? 12 : 0 }}>{message}</div>
+      {onRetry && (
+        <Button variant="ghost" onClick={onRetry}>
+          Try again
+        </Button>
+      )}
+    </div>
+  );
+}

@@ -19,7 +19,16 @@ export function useConfig() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
-    if (!res.ok) throw new Error(`Failed to save settings (${res.status})`);
+    if (!res.ok) {
+      let message = "Couldn't save settings. Please try again.";
+      try {
+        const body = await res.json();
+        if (body?.error && typeof body.error === "string") message = body.error;
+      } catch {
+        /* keep generic message */
+      }
+      throw new Error(message);
+    }
     const updated = (await res.json()) as Config;
     await mutate(updated, { revalidate: false });
     return updated;

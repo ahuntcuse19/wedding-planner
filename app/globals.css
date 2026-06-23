@@ -41,6 +41,16 @@ body {
   border-radius: 4px;
 }
 
+/* Loading skeleton shimmer (components/primitives.tsx Skeleton). */
+@keyframes wp-shimmer {
+  0% {
+    background-position: 200px 0;
+  }
+  100% {
+    background-position: -200px 0;
+  }
+}
+
 /* Respect users who prefer reduced motion. */
 @media (prefers-reduced-motion: reduce) {
   *,

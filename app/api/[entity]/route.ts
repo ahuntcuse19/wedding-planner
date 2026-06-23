@@ -1,29 +1,33 @@
-import { NextResponse } from "next/server";
 import { delegateFor, isEntitySlug } from "@/lib/server/entities";
-import { sanitize } from "@/lib/schemas";
+import { sanitize, validate } from "@/lib/schemas";
+import { HttpError, json, readJson, withErrors } from "@/lib/server/handler";
 
 // Generic list + create for every entity. One handler, no per-entity fetch code.
-export async function GET(
+export const GET = withErrors(async (
   _req: Request,
   ctx: { params: Promise<{ entity: string }> },
-) {
+) => {
   const { entity } = await ctx.params;
   const delegate = delegateFor(entity);
-  if (!delegate) return NextResponse.json({ error: "Unknown entity" }, { status: 404 });
+  if (!delegate) throw new HttpError(404, "Unknown entity.");
   const rows = await delegate.findMany({ orderBy: { id: "asc" } });
-  return NextResponse.json(rows);
-}
+  return json(rows);
+});
 
-export async function POST(
+export const POST = withErrors(async (
   req: Request,
   ctx: { params: Promise<{ entity: string }> },
-) {
+) => {
   const { entity } = await ctx.params;
   const delegate = delegateFor(entity);
-  if (!delegate || !isEntitySlug(entity))
-    return NextResponse.json({ error: "Unknown entity" }, { status: 404 });
-  const body = (await req.json()) as Record<string, unknown>;
-  const data = sanitize(entity, body);
-  const row = await delegate.create({ data });
-  return NextResponse.json(row, { status: 201 });
-}
+  if (!delegate || !isEntitySlug(entity)) throw new HttpError(404, "Unknown entity.");
+  const body = await readJson(req);
+  const result = validate(entity, body);
+  if (!result.ok)
+    throw new HttpError(400, "Validation failed.", {
+      error: "Validation failed.",
+      errors: result.errors,
+    });
+  const row = await delegate.create({ data: sanitize(entity, body) });
+  return json(row, 201);
+});

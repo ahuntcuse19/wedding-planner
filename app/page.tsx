@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { C, F } from "@/lib/theme";
-import { Badge, Card, PageTitle, Stat } from "@/components/primitives";
+import { Badge, Card, ErrorState, PageTitle, Skeleton, Stat } from "@/components/primitives";
 import { useConfig } from "@/hooks/useConfig";
 import { useEntity } from "@/hooks/useEntity";
 import { ownerLabel, type BudgetLine, type Guest, type Task, type Vendor } from "@/lib/types";
@@ -19,11 +19,55 @@ function daysToGo(dateISO?: string | null): number | null {
 }
 
 export default function Dashboard() {
-  const { config } = useConfig();
-  const { data: guests } = useEntity<Guest>("guests");
-  const { data: budget } = useEntity<BudgetLine>("budget");
-  const { data: tasks } = useEntity<Task>("tasks");
-  const { data: vendors } = useEntity<Vendor>("vendors");
+  const cfg = useConfig();
+  const g = useEntity<Guest>("guests");
+  const b = useEntity<BudgetLine>("budget");
+  const t = useEntity<Task>("tasks");
+  const v = useEntity<Vendor>("vendors");
+  const config = cfg.config;
+  const { data: guests } = g;
+  const { data: budget } = b;
+  const { data: tasks } = t;
+  const { data: vendors } = v;
+
+  const loading = cfg.isLoading || g.isLoading || b.isLoading || t.isLoading || v.isLoading;
+  const anyError = cfg.error || g.error || b.error || t.error || v.error;
+  const retry = () => {
+    cfg.refresh();
+    g.refresh();
+    b.refresh();
+    t.refresh();
+    v.refresh();
+  };
+
+  if (anyError) {
+    return (
+      <div>
+        <PageTitle title="Dashboard" subtitle="Everything at a glance." />
+        <ErrorState message="Couldn't load your dashboard." onRetry={retry} />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div>
+        <PageTitle title="Dashboard" subtitle="Everything at a glance." />
+        <Card style={{ marginBottom: 20, textAlign: "center" }}>
+          <Skeleton width={260} height={52} style={{ margin: "0 auto 10px" }} />
+          <Skeleton width={180} height={14} style={{ margin: "0 auto" }} />
+        </Card>
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))" }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <Skeleton width="60%" height={12} style={{ marginBottom: 10 }} />
+              <Skeleton width="40%" height={28} />
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const days = daysToGo(config?.date);
   const rsvpYes = guests.filter((g) => g.rsvp === "Yes").length;

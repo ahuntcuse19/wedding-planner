@@ -5,9 +5,11 @@ import { C } from "@/lib/theme";
 import { SCHEMAS, type Field, type Option } from "@/lib/schemas";
 import type { EntitySlug } from "@/lib/types";
 import { useEntity } from "@/hooks/useEntity";
+import { useToast } from "./Toast";
+import { useConfirm } from "./ConfirmDialog";
 import Modal from "./Modal";
 import EntityEditor from "./EntityEditor";
-import { Badge, Button, Card, Empty } from "./primitives";
+import { Badge, Button, Card, Empty, ErrorState, SkeletonList } from "./primitives";
 
 interface Row {
   id: number;
@@ -35,9 +37,12 @@ export default function CrudList({
   addLabel?: string;
 }) {
   const schema = SCHEMAS[slug];
-  const { data, isLoading, create, update, remove, refresh } = useEntity<Row>(slug);
+  const { data, isLoading, error, create, update, remove, refresh } = useEntity<Row>(slug);
+  const toast = useToast();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState<Row | null>(null);
   const [adding, setAdding] = useState(false);
+  const noun = schema.singular.toLowerCase();
 
   const items = useMemo(
     () => (filter ? data.filter(filter) : data),
@@ -71,8 +76,10 @@ export default function CrudList({
         <Button onClick={() => setAdding(true)}>+ {addLabel ?? `Add ${schema.singular.toLowerCase()}`}</Button>
       </div>
 
-      {isLoading ? (
-        <Empty>Loading…</Empty>
+      {error ? (
+        <ErrorState message={`Couldn't load ${schema.plural.toLowerCase()}.`} onRetry={() => refresh()} />
+      ) : isLoading ? (
+        <SkeletonList />
       ) : items.length === 0 ? (
         <Empty>No {schema.plural.toLowerCase()} yet. Add your first one.</Empty>
       ) : (
@@ -101,11 +108,18 @@ export default function CrudList({
                   <Button
                     variant="danger"
                     onClick={async () => {
-                      if (!confirm(`Delete this ${schema.singular.toLowerCase()}?`)) return;
+                      const ok = await confirm({
+                        title: `Delete ${noun}?`,
+                        body: `This permanently removes this ${noun}. This can't be undone.`,
+                        confirmLabel: "Delete",
+                        danger: true,
+                      });
+                      if (!ok) return;
                       try {
                         await remove(item.id);
-                      } catch {
-                        alert(`Could not delete this ${schema.singular.toLowerCase()}. Please try again.`);
+                        toast.success(`${schema.singular} deleted.`);
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : `Couldn't delete this ${noun}.`);
                       }
                     }}
                   >
@@ -126,6 +140,7 @@ export default function CrudList({
           onSubmit={async (values) => {
             await create(values);
             setAdding(false);
+            toast.success(`${schema.singular} added.`);
           }}
         />
       </Modal>
@@ -140,6 +155,7 @@ export default function CrudList({
             onSubmit={async (values) => {
               await update(editing.id, values);
               setEditing(null);
+              toast.success(`${schema.singular} updated.`);
             }}
           />
         )}

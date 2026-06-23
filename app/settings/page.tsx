@@ -1,15 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import EntityEditor from "@/components/EntityEditor";
-import { Card, PageTitle, Empty } from "@/components/primitives";
-import { C } from "@/lib/theme";
+import { Card, PageTitle, ErrorState, Skeleton } from "@/components/primitives";
 import { CONFIG_FIELDS } from "@/lib/schemas";
 import { useConfig } from "@/hooks/useConfig";
+import { useToast } from "@/components/Toast";
 
 export default function SettingsPage() {
-  const { config, update, refresh } = useConfig();
-  const [saved, setSaved] = useState(false);
+  const { config, isLoading, error, update, refresh } = useConfig();
+  const toast = useToast();
 
   return (
     <div>
@@ -17,8 +16,17 @@ export default function SettingsPage() {
         title="Settings"
         subtitle="Dates, partner names, emails, budget range, and guest target."
       />
-      {!config ? (
-        <Empty>Loading…</Empty>
+      {error ? (
+        <ErrorState message="Couldn't load your settings." onRetry={() => refresh()} />
+      ) : isLoading || !config ? (
+        <Card style={{ maxWidth: 560, display: "grid", gap: 16 }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i}>
+              <Skeleton width="30%" height={12} style={{ marginBottom: 6 }} />
+              <Skeleton height={38} radius={10} />
+            </div>
+          ))}
+        </Card>
       ) : (
         <Card style={{ maxWidth: 560 }}>
           <EntityEditor
@@ -28,15 +36,9 @@ export default function SettingsPage() {
             onCancel={() => refresh()}
             onSubmit={async (values) => {
               await update(values);
-              setSaved(true);
-              setTimeout(() => setSaved(false), 2500);
+              toast.success("Settings saved.");
             }}
           />
-          {saved && (
-            <div style={{ color: C.accent, fontWeight: 600, marginTop: 12, fontSize: 14 }}>
-              ✓ Saved.
-            </div>
-          )}
         </Card>
       )}
     </div>

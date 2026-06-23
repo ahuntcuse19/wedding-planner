@@ -9,6 +9,19 @@ const fetcher = async (url: string) => {
   return res.json();
 };
 
+// Pull a human-readable message out of a failed write response, falling back to
+// a generic one so toasts/inline errors never show "[object Object]".
+async function failure(res: Response, action: string): Promise<Error> {
+  let message = `Couldn't ${action}. Please try again.`;
+  try {
+    const body = await res.json();
+    if (body?.error && typeof body.error === "string") message = body.error;
+  } catch {
+    /* non-JSON body — keep the generic message */
+  }
+  return new Error(message);
+}
+
 // The single client data layer. Every module reads/writes through this hook —
 // no scattered fetch calls. Same shape regardless of entity.
 export function useEntity<T extends { id: number }>(slug: EntitySlug) {
@@ -21,7 +34,7 @@ export function useEntity<T extends { id: number }>(slug: EntitySlug) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
-    if (!res.ok) throw new Error(`Failed to create (${res.status})`);
+    if (!res.ok) throw await failure(res, "save this");
     await mutate();
   }
 
@@ -31,13 +44,13 @@ export function useEntity<T extends { id: number }>(slug: EntitySlug) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
-    if (!res.ok) throw new Error(`Failed to update (${res.status})`);
+    if (!res.ok) throw await failure(res, "save this");
     await mutate();
   }
 
   async function remove(id: number) {
     const res = await fetch(`${key}/${id}`, { method: "DELETE" });
-    if (!res.ok) throw new Error(`Failed to delete (${res.status})`);
+    if (!res.ok) throw await failure(res, "delete this");
     await mutate();
   }
 
