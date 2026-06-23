@@ -27,8 +27,11 @@ function LoginForm() {
         setError(d.error ?? "Incorrect password.");
         return;
       }
+      // Only allow same-origin relative paths — reject protocol-relative
+      // ("//host") and absolute URLs to prevent an open redirect.
       const next = params.get("next") || "/";
-      router.replace(next.startsWith("/") ? next : "/");
+      const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+      router.replace(safeNext);
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
