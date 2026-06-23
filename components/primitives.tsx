@@ -24,6 +24,7 @@ export function Button({
       {...props}
       style={{
         padding: "8px 14px",
+        minHeight: 40,
         borderRadius: 10,
         fontSize: 14,
         fontWeight: 600,

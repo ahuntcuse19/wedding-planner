@@ -41,6 +41,21 @@ body {
   border-radius: 4px;
 }
 
+/* Primary nav: a horizontal tab bar that scrolls cleanly on small screens
+   (a touch-friendly responsive pattern) with the scrollbar hidden. */
+.wp-nav {
+  display: flex;
+  gap: 4px;
+  margin-top: 14px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.wp-nav::-webkit-scrollbar {
+  display: none;
+}
+
 /* Loading skeleton shimmer (components/primitives.tsx Skeleton). */
 @keyframes wp-shimmer {
   0% {
