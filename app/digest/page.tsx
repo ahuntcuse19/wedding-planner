@@ -3,30 +3,36 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { C } from "@/lib/theme";
-import { Badge, Button, Card, Empty, PageTitle } from "@/components/primitives";
+import { Badge, Button, Card, Empty, ErrorState, PageTitle, SkeletonList } from "@/components/primitives";
 import { useConfig } from "@/hooks/useConfig";
+import { useToast } from "@/components/Toast";
 import type { EmailLogEntry } from "@/lib/types";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+};
 
 export default function DigestPage() {
   const { config } = useConfig();
-  const { data: log, mutate } = useSWR<EmailLogEntry[]>("/api/digest/log", fetcher);
+  const { data: log, error: logError, mutate } = useSWR<EmailLogEntry[]>("/api/digest/log", fetcher);
+  const toast = useToast();
   const [sending, setSending] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; reason?: string; status?: string } | null>(null);
 
   const recipients = [config?.partner1Email, config?.partner2Email].filter((e) => e && e.trim());
 
   async function sendNow() {
     setSending(true);
-    setResult(null);
     try {
       const r = await fetch("/api/digest/send", { method: "POST" });
-      const d = await r.json();
-      setResult(d);
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.status === "skipped") toast.info(`Skipped: ${d.reason ?? "no changes to report"}`);
+      else if (r.ok) toast.success("Digest sent.");
+      else toast.error(`Couldn't send: ${d.reason ?? d.error ?? "please try again"}`);
       await mutate();
     } catch {
-      setResult({ ok: false, reason: "Request failed" });
+      toast.error("Couldn't send the digest. Please try again.");
     } finally {
       setSending(false);
     }
@@ -52,22 +58,6 @@ export default function DigestPage() {
         <Button onClick={sendNow} disabled={sending || recipients.length === 0}>
           {sending ? "Sending…" : "Send digest now"}
         </Button>
-        {result && (
-          <div
-            style={{
-              marginTop: 12,
-              fontSize: 14,
-              fontWeight: 600,
-              color: result.ok ? C.accent : C.danger,
-            }}
-          >
-            {result.ok
-              ? result.status === "skipped"
-                ? `Skipped: ${result.reason}`
-                : "✓ Digest sent."
-              : `Could not send: ${result.reason}`}
-          </div>
-        )}
         <div style={{ color: C.inkSoft, fontSize: 12.5, marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
           A weekly digest can be scheduled (default Sunday 6pm) via Vercel Cron or a node-cron worker hitting{" "}
           <code style={{ background: C.surfaceAlt, padding: "1px 5px", borderRadius: 5 }}>/api/cron/digest</code>. See the README.
@@ -75,8 +65,10 @@ export default function DigestPage() {
       </Card>
 
       <h2 style={{ fontSize: 16, fontWeight: 700, color: C.ink, margin: "0 0 12px" }}>History</h2>
-      {!log ? (
-        <Empty>Loading…</Empty>
+      {logError ? (
+        <ErrorState message="Couldn't load digest history." onRetry={() => mutate()} />
+      ) : !log ? (
+        <SkeletonList rows={2} />
       ) : log.length === 0 ? (
         <Empty>No digests sent yet.</Empty>
       ) : (

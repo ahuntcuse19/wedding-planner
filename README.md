@@ -64,6 +64,20 @@ To reset the database to seed state at any time: `npm run db:reset`.
   target, budget range, and the two **partner names + emails**.
 - **Digest** — send a summary email now, view the send history.
 
+## Access (password gate)
+
+The app and all its API routes can be protected by a single **shared password**
+(no user accounts). Set both env vars to enable it:
+
+- `APP_PASSWORD` — the password you'll type to sign in.
+- `AUTH_SECRET` — signs the session cookie; generate one with `openssl rand -hex 32`.
+
+When set, unauthenticated visitors are redirected to `/login` and API calls
+return `401`. A signed, httpOnly cookie keeps you logged in for 30 days; use
+**Log out** in the header to clear it. The weekly cron route (`/api/cron/digest`)
+is exempt — it stays protected by `CRON_SECRET` instead. If either var is unset
+the gate is **disabled** (the app is open), so a missing var can't lock you out.
+
 ## Adding API keys
 
 All keys go in `.env` (never committed). See `.env.example` for the full list.
@@ -127,10 +141,10 @@ cron.schedule("0 18 * * 0", () => {
 
 ## Deploy to Vercel
 
-The repo is Vercel-ready: `vercel.json` registers the weekly cron, `next.config.ts`
+The repo is Vercel-ready: `vercel.json` sets the framework + cron, `next.config.ts`
 externalizes Prisma for serverless, and the `vercel-build` script runs
-`prisma generate && prisma migrate deploy && next build` so the schema is applied
-on every deploy.
+`prisma generate && next build`. Database migrations are applied **out-of-band**
+(not during the build) — see step 4 below.
 
 1. **Database** — create a Postgres database (e.g. [Neon](https://neon.tech),
    Supabase, or Vercel Postgres) and copy its **direct (non-pooled)** connection
@@ -144,19 +158,28 @@ on every deploy.
    | Variable | Value |
    | --- | --- |
    | `DATABASE_URL` | your Postgres **direct** connection string (required) |
+   | `APP_PASSWORD` / `AUTH_SECRET` | enable the shared-password gate (recommended for a public URL) |
    | `RESEND_API_KEY` | your Resend key (optional — blank disables email) |
    | `EMAIL_FROM` | verified sender, or `onboarding@resend.dev` |
    | `CRON_SECRET` | `openssl rand -hex 32` (required for the weekly digest) |
    | `VENUE_SEARCH_ENABLED` / `PLACES_API_KEY` | optional venue search |
 
-4. **Deploy.** `vercel-build` applies migrations automatically. Migrations do **not**
-   seed — run the seed once against the production DB if you want sample data:
+4. **Apply migrations + (optionally) seed.** The build does **not** run migrations,
+   so apply them against your database once (and again whenever the schema changes):
+   `DATABASE_URL=<url> npx prisma migrate deploy`. For sample data, also run
    `DATABASE_URL=<url> npm run seed` (or just add your real data through the UI).
 5. The weekly digest fires Sundays 18:00 **UTC** — adjust the schedule in
    `vercel.json` for your timezone.
 
 > Note: SQLite can't be used in production — Vercel's serverless filesystem is
 > ephemeral and read-only, so the app uses Postgres everywhere.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every PR and push to `main`: it installs deps,
+generates the Prisma client, then runs **ESLint** (`npm run lint`) and a
+**TypeScript** check (`npm run typecheck`). No database is needed. Run the same
+checks locally with `npm run lint && npm run typecheck`.
 
 ## Costs
 
@@ -174,6 +197,8 @@ on every deploy.
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | yes | Postgres connection string (direct/non-pooled). Used for migrations and runtime. |
+| `APP_PASSWORD` | for the gate | Shared password; blank = app open |
+| `AUTH_SECRET` | for the gate | Signs the session cookie (`openssl rand -hex 32`) |
 | `RESEND_API_KEY` | for email | Resend API key; blank = email disabled |
 | `EMAIL_FROM` | for email | Verified/sandbox sender address |
 | `CRON_SECRET` | for weekly digest | Shared secret protecting the cron route |

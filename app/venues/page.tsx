@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { C, F, statusStyle } from "@/lib/theme";
-import { Badge, Button, Card, Empty, PageTitle } from "@/components/primitives";
+import { Badge, Button, Card, Empty, ErrorState, PageTitle, SkeletonList } from "@/components/primitives";
 import Modal from "@/components/Modal";
 import EntityEditor from "@/components/EntityEditor";
+import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { SCHEMAS } from "@/lib/schemas";
 import { VENUE_STATUSES, type Venue } from "@/lib/types";
 import { useEntity } from "@/hooks/useEntity";
@@ -24,14 +26,15 @@ interface SearchResult {
 
 export default function VenuesPage() {
   const schema = SCHEMAS.venues;
-  const { data, create, update, remove, refresh } = useEntity<Venue>("venues");
+  const { data, isLoading, error, create, update, remove, refresh } = useEntity<Venue>("venues");
   const { config, refresh: refreshConfig } = useConfig();
+  const toast = useToast();
+  const confirm = useConfirm();
   const guestTarget = config?.guestTarget ?? 0;
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Venue | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   // Optional search state (only used when the env-gated API reports enabled).
   const [searchEnabled, setSearchEnabled] = useState(false);
@@ -77,9 +80,9 @@ export default function VenuesPage() {
         status: "Considering",
         source: res.source,
       } as Partial<Venue>);
-      setNotice(`Saved “${res.name}” to your venues.`);
-    } catch {
-      setNotice(`Could not save “${res.name}”. Please try again.`);
+      toast.success(`Saved “${res.name}” to your venues.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : `Couldn't save “${res.name}”.`);
     }
   }
 
@@ -94,13 +97,10 @@ export default function VenuesPage() {
       const d = await r.json();
       await refresh();
       await refreshConfig();
-      setNotice(
-        d.capacityWarning
-          ? `${v.name} set as your venue. ⚠ ${d.capacityWarning}`
-          : `${v.name} set as your venue.`,
-      );
+      if (d.capacityWarning) toast.info(`${v.name} set as your venue. ⚠ ${d.capacityWarning}`);
+      else toast.success(`${v.name} set as your venue.`);
     } catch {
-      setNotice(`Could not set ${v.name} as your venue. Please try again.`);
+      toast.error(`Couldn't set ${v.name} as your venue. Please try again.`);
     }
   }
 
@@ -109,15 +109,6 @@ export default function VenuesPage() {
   return (
     <div>
       <PageTitle title="Venues" subtitle="Explore, compare, and choose where you'll celebrate." />
-
-      {notice && (
-        <Card style={{ background: C.primarySoft, borderColor: C.primary, marginBottom: 16, padding: "12px 16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-            <span style={{ color: C.ink, fontSize: 14 }}>{notice}</span>
-            <button onClick={() => setNotice(null)} aria-label="Dismiss" style={{ border: "none", background: "transparent", cursor: "pointer", color: C.inkSoft, fontSize: 18 }}>×</button>
-          </div>
-        </Card>
-      )}
 
       {/* Optional, env-gated live search. Hidden entirely without an API key. */}
       {searchEnabled && (
@@ -175,7 +166,11 @@ export default function VenuesPage() {
         <Button onClick={() => setAdding(true)}>+ Add venue</Button>
       </div>
 
-      {venues.length === 0 ? (
+      {error ? (
+        <ErrorState message="Couldn't load venues." onRetry={() => refresh()} />
+      ) : isLoading ? (
+        <SkeletonList />
+      ) : venues.length === 0 ? (
         <Empty>No venues yet. Add one manually{searchEnabled ? " or search above" : ""}.</Empty>
       ) : (
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))" }}>
@@ -215,7 +210,26 @@ export default function VenuesPage() {
                   )}
                   <div style={{ flex: 1 }} />
                   <Button variant="ghost" onClick={() => setEditing(v)}>Edit</Button>
-                  <Button variant="danger" onClick={async () => { if (!confirm("Delete this venue?")) return; try { await remove(v.id); } catch { setNotice("Could not delete this venue. Please try again."); } }}>Delete</Button>
+                  <Button
+                    variant="danger"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: "Delete venue?",
+                        body: `This permanently removes “${v.name}”. This can't be undone.`,
+                        confirmLabel: "Delete",
+                        danger: true,
+                      });
+                      if (!ok) return;
+                      try {
+                        await remove(v.id);
+                        toast.success("Venue deleted.");
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Couldn't delete this venue.");
+                      }
+                    }}
+                  >
+                    Delete
+                  </Button>
                 </div>
               </Card>
             );
@@ -227,7 +241,7 @@ export default function VenuesPage() {
         <EntityEditor
           fields={schema.fields}
           onCancel={() => setAdding(false)}
-          onSubmit={async (values) => { await create(values as Partial<Venue>); setAdding(false); }}
+          onSubmit={async (values) => { await create(values as Partial<Venue>); setAdding(false); toast.success("Venue added."); }}
         />
       </Modal>
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit venue">
@@ -236,7 +250,7 @@ export default function VenuesPage() {
             fields={schema.fields}
             initial={editing as unknown as Record<string, unknown>}
             onCancel={() => setEditing(null)}
-            onSubmit={async (values) => { await update(editing.id, values as Partial<Venue>); setEditing(null); }}
+            onSubmit={async (values) => { await update(editing.id, values as Partial<Venue>); setEditing(null); toast.success("Venue updated."); }}
           />
         )}
       </Modal>

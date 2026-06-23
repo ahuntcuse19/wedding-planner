@@ -62,7 +62,7 @@ export default function Modal({
           borderRadius: 18,
           border: `1px solid ${C.border}`,
           width: "100%",
-          maxWidth: 520,
+          maxWidth: "min(520px, calc(100vw - 32px))",
           boxShadow: "0 24px 60px rgba(40,34,28,0.25)",
         }}
       >

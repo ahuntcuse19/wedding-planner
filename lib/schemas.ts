@@ -37,6 +37,9 @@ export interface Field {
   // Numeric fields backed by a nullable column: empty input stores null instead
   // of 0. Leave false for non-nullable columns (e.g. capacity, estCost).
   nullable?: boolean;
+  // Optional length cap + regex for string fields (enforced client + server).
+  maxLength?: number;
+  pattern?: string;
   // Display text for a boolean field's true/false states (default Yes/No).
   trueLabel?: string;
   falseLabel?: string;
@@ -237,4 +240,80 @@ export function sanitizeConfig(body: Record<string, unknown>): Record<string, un
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Shared validation — one implementation used by both the client (EntityEditor
+// inline field errors) and the server (API routes return 400 { errors }). This
+// keeps validation rules in the same single source of truth as the fields.
+// ---------------------------------------------------------------------------
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const URL_RE = /^https?:\/\/.+/i;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/; // HTML date input format
+
+export type ValidationResult =
+  | { ok: true }
+  | { ok: false; errors: Record<string, string> };
+
+export interface ValidateOptions {
+  // Partial (PATCH) only checks fields present in the body; create checks all.
+  partial?: boolean;
+}
+
+function validateField(field: Field, raw: unknown): string | null {
+  if (field.type === "boolean") return null;
+
+  if (field.type === "number" || field.type === "money") {
+    if (raw === "" || raw === null || raw === undefined) {
+      return field.required ? `${field.label} is required.` : null;
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return `${field.label} must be a number.`;
+    if (n < 0) return `${field.label} can't be negative.`;
+    return null;
+  }
+
+  const s = raw === null || raw === undefined ? "" : String(raw).trim();
+  if (s === "") return field.required ? `${field.label} is required.` : null;
+  if (field.maxLength && s.length > field.maxLength)
+    return `${field.label} must be ${field.maxLength} characters or fewer.`;
+  if (field.type === "email" && !EMAIL_RE.test(s)) return "Enter a valid email address.";
+  if (field.type === "url" && !URL_RE.test(s)) return "Enter a valid URL (https://…).";
+  if (field.type === "date" && !DATE_RE.test(s)) return "Enter a valid date.";
+  if (field.pattern && !new RegExp(field.pattern).test(s)) return `${field.label} is invalid.`;
+  return null;
+}
+
+export function validateFields(
+  fields: Field[],
+  body: Record<string, unknown>,
+  opts: ValidateOptions = {},
+): ValidationResult {
+  const errors: Record<string, string> = {};
+  for (const field of fields) {
+    const present = field.key in body;
+    if (!present) {
+      if (!opts.partial && field.required) errors[field.key] = `${field.label} is required.`;
+      continue;
+    }
+    const err = validateField(field, body[field.key]);
+    if (err) errors[field.key] = err;
+  }
+  return Object.keys(errors).length ? { ok: false, errors } : { ok: true };
+}
+
+export function validate(
+  slug: EntitySlug,
+  body: Record<string, unknown>,
+  opts: ValidateOptions = {},
+): ValidationResult {
+  return validateFields(SCHEMAS[slug].fields, body, opts);
+}
+
+export function validateConfig(
+  body: Record<string, unknown>,
+  opts: ValidateOptions = {},
+): ValidationResult {
+  return validateFields(CONFIG_FIELDS, body, opts);
 }

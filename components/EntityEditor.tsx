@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { C } from "@/lib/theme";
-import type { Field, Option } from "@/lib/schemas";
+import { validateFields, type Field, type Option } from "@/lib/schemas";
 import { Button } from "./primitives";
 
 const labelStyle: React.CSSProperties = {
@@ -51,11 +51,32 @@ export default function EntityEditor({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const set = (key: string, val: unknown) => setValues((p) => ({ ...p, [key]: val }));
+  const set = (key: string, val: unknown) => {
+    setValues((p) => ({ ...p, [key]: val }));
+    // Clear a field's error as soon as the user edits it.
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Client-side validation using the same rules the server enforces.
+    const result = validateFields(fields, values);
+    if (!result.ok) {
+      setFieldErrors(result.errors);
+      const firstInvalid = fields.find((f) => result.errors[f.key]);
+      if (firstInvalid) document.getElementById(`field-${firstInvalid.key}`)?.focus();
+      return;
+    }
+    setFieldErrors({});
+
     setSaving(true);
     setError(null);
     try {
@@ -74,6 +95,12 @@ export default function EntityEditor({
         {fields.map((f) => {
           const options = optionOverrides?.[f.key] ?? f.options;
           const id = `field-${f.key}`;
+          const err = fieldErrors[f.key];
+          const errId = `${id}-error`;
+          const describedBy = err ? errId : undefined;
+          const controlStyle = err
+            ? { ...inputStyle, borderColor: C.danger }
+            : inputStyle;
           return (
             <div key={f.key}>
               {f.type === "boolean" ? (
@@ -94,7 +121,7 @@ export default function EntityEditor({
                     {f.required && <span style={{ color: C.danger }}> *</span>}
                   </label>
                   {f.type === "select" ? (
-                    <select id={id} required={f.required} value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} style={inputStyle}>
+                    <select id={id} required={f.required} aria-invalid={!!err} aria-describedby={describedBy} value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} style={controlStyle}>
                       <option value="">—</option>
                       {(options ?? []).map((o) => (
                         <option key={o.value} value={o.value}>
@@ -103,19 +130,27 @@ export default function EntityEditor({
                       ))}
                     </select>
                   ) : f.type === "textarea" ? (
-                    <textarea id={id} value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical" }} placeholder={f.placeholder} />
+                    <textarea id={id} aria-invalid={!!err} aria-describedby={describedBy} value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} rows={3} style={{ ...controlStyle, resize: "vertical" }} placeholder={f.placeholder} />
                   ) : (
                     <input
                       id={id}
                       required={f.required}
+                      aria-invalid={!!err}
+                      aria-describedby={describedBy}
                       type={f.type === "money" || f.type === "number" ? "number" : f.type === "date" ? "date" : f.type === "email" ? "email" : f.type === "url" ? "url" : "text"}
                       value={String(values[f.key] ?? "")}
                       onChange={(e) => set(f.key, e.target.value)}
-                      style={inputStyle}
+                      style={controlStyle}
                       placeholder={f.placeholder}
                     />
                   )}
-                  {f.help && <div style={{ color: C.inkSoft, fontSize: 12, marginTop: 4 }}>{f.help}</div>}
+                  {err ? (
+                    <div id={errId} role="alert" style={{ color: C.danger, fontSize: 12, fontWeight: 600, marginTop: 4 }}>
+                      {err}
+                    </div>
+                  ) : (
+                    f.help && <div style={{ color: C.inkSoft, fontSize: 12, marginTop: 4 }}>{f.help}</div>
+                  )}
                 </>
               )}
             </div>
