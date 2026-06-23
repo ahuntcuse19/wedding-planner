@@ -30,14 +30,15 @@ easiest local database is a free **Neon** branch — no install required.
 
 ```bash
 npm install
-cp .env.example .env        # set DATABASE_URL + DIRECT_URL (Neon), then other keys
+cp .env.example .env        # set DATABASE_URL (Neon/Supabase/etc.), then other keys
 npx prisma migrate deploy   # apply migrations to your database
 npm run seed                # load sample guests, budget, tasks, vendors, venues
 npm run dev                 # http://localhost:3000
 ```
 
-- `DATABASE_URL` = Neon **pooled** connection (the `-pooler` host).
-- `DIRECT_URL` = Neon **direct** connection (used for migrations).
+- `DATABASE_URL` = one Postgres connection string. Use your provider's **direct
+  (non-pooled)** URL — it works for both `prisma migrate deploy` (build) and
+  queries (runtime). Set the same variable in the Vercel dashboard.
 
 The app runs fully **without any email/search API keys** — those features stay
 disabled (and say so) until you add keys.
@@ -45,7 +46,8 @@ disabled (and say so) until you add keys.
 To reset the database to seed state at any time: `npm run db:reset`.
 
 > Prefer SQLite for purely-local work? You can switch `provider` back to
-> `"sqlite"` in `prisma/schema.prisma` and use `DATABASE_URL="file:./dev.db"`,
+> `"sqlite"` in `prisma/schema.prisma` and use a single `url = env("DATABASE_URL")`
+> with `DATABASE_URL="file:./dev.db"`,
 > but Vercel's serverless filesystem is ephemeral, so production needs Postgres.
 
 ## Modules
@@ -130,19 +132,18 @@ externalizes Prisma for serverless, and the `vercel-build` script runs
 `prisma generate && prisma migrate deploy && next build` so the schema is applied
 on every deploy.
 
-1. **Database** — create a Postgres database:
-   - **Neon**: create a project, grab the pooled + direct connection strings.
-   - **Vercel Postgres**: add it from the project's Storage tab — it injects
-     `POSTGRES_*` env vars automatically.
+1. **Database** — create a Postgres database (e.g. [Neon](https://neon.tech),
+   Supabase, or Vercel Postgres) and copy its **direct (non-pooled)** connection
+   string.
 2. **Import the repo** into Vercel (New Project → pick this Git repo). Framework
    auto-detects as Next.js.
-3. **Set environment variables** in the Vercel project (Settings → Environment
-   Variables):
+3. **Set the environment variables** (Settings → Environment Variables). Add
+   `DATABASE_URL` for **all** environments (Production, Preview, **and** Development —
+   PR deploys are Preview builds):
 
    | Variable | Value |
    | --- | --- |
-   | `DATABASE_URL` | Postgres URL (Vercel Postgres: `POSTGRES_PRISMA_URL`) |
-   | `DIRECT_URL` | _optional_ — direct URL for migrations (Vercel Postgres: `POSTGRES_URL_NON_POOLING`); defaults to `DATABASE_URL` |
+   | `DATABASE_URL` | your Postgres **direct** connection string (required) |
    | `RESEND_API_KEY` | your Resend key (optional — blank disables email) |
    | `EMAIL_FROM` | verified sender, or `onboarding@resend.dev` |
    | `CRON_SECRET` | `openssl rand -hex 32` (required for the weekly digest) |
@@ -150,8 +151,7 @@ on every deploy.
 
 4. **Deploy.** `vercel-build` applies migrations automatically. Migrations do **not**
    seed — run the seed once against the production DB if you want sample data:
-   `DATABASE_URL=<prod-url> DIRECT_URL=<prod-direct-url> npm run seed` (or just add
-   your real data through the UI).
+   `DATABASE_URL=<url> npm run seed` (or just add your real data through the UI).
 5. The weekly digest fires Sundays 18:00 **UTC** — adjust the schedule in
    `vercel.json` for your timezone.
 
@@ -173,8 +173,7 @@ on every deploy.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | yes | Postgres connection (runtime); pooled is serverless-safe |
-| `DIRECT_URL` | no | Direct connection for migrations; defaults to `DATABASE_URL` if unset |
+| `DATABASE_URL` | yes | Postgres connection string (direct/non-pooled). Used for migrations and runtime. |
 | `RESEND_API_KEY` | for email | Resend API key; blank = email disabled |
 | `EMAIL_FROM` | for email | Verified/sandbox sender address |
 | `CRON_SECRET` | for weekly digest | Shared secret protecting the cron route |
