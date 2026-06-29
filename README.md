@@ -3,8 +3,13 @@
 A full-stack wedding-planning app: venues, guests, budget, timeline, vendors, a
 chosen-venue–driven location, partner task assignment, and emailed digests.
 
-Built with **Next.js (App Router) + TypeScript + Tailwind + Postgres (Prisma) + Resend**,
+Built with **Next.js (App Router) + TypeScript + Tailwind + Google Sheets + Resend**,
 deployable to **Vercel**.
+
+> **Backend:** there's no database. All data lives in one **Google Sheet** — a
+> tab per entity (Guests, Budget, Tasks, Vendors, Venues, Config, EmailLog). The
+> app reads and writes it through a Google service account, and you can also edit
+> the data directly in Google Sheets. No connection string, no migrations.
 
 ## Architecture (the anti-tech-debt core)
 
@@ -22,33 +27,45 @@ deployable to **Vercel**.
 
 ## Setup (local)
 
-The app uses **Postgres** (so it runs the same locally and on Vercel). The
-easiest local database is a free **Neon** branch — no install required.
+The app stores everything in a **Google Sheet**, accessed through a Google Cloud
+**service account**. One-time setup:
 
-1. Create a project at <https://neon.tech> and copy its connection strings.
-2. Configure env and run:
+1. **Create the sheet.** Make a blank Google Sheet and copy its id from the URL:
+   `https://docs.google.com/spreadsheets/d/`**`THIS_PART`**`/edit`.
+2. **Create a service account.** In the [Google Cloud Console](https://console.cloud.google.com):
+   create (or pick) a project → **APIs & Services → Library → enable "Google
+   Sheets API"** → **Credentials → Create credentials → Service account** →
+   open it → **Keys → Add key → JSON**. The downloaded JSON has `client_email`
+   and `private_key`.
+3. **Share the sheet** with that `client_email` as an **Editor**.
+4. **Configure env and seed the tabs:**
 
 ```bash
 npm install
-cp .env.example .env        # set DATABASE_URL (Neon/Supabase/etc.), then other keys
-npx prisma migrate deploy   # apply migrations to your database
-npm run seed                # load sample guests, budget, tasks, vendors, venues
+cp .env.example .env        # set the three GOOGLE_* vars, then other keys
+npm run sheets:init         # creates a tab per entity + loads sample data
 npm run dev                 # http://localhost:3000
 ```
 
-- `DATABASE_URL` = one Postgres connection string. Use your provider's **direct
-  (non-pooled)** URL — it works for both `prisma migrate deploy` (build) and
-  queries (runtime). Set the same variable in the Vercel dashboard.
+`.env` needs three values (all also go in the Vercel dashboard):
+
+- `GOOGLE_SHEETS_ID` — the id from step 1.
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL` — the JSON's `client_email`.
+- `GOOGLE_PRIVATE_KEY` — the JSON's `private_key`, in quotes, keeping the literal
+  `\n` sequences (the app turns them back into newlines).
 
 The app runs fully **without any email/search API keys** — those features stay
 disabled (and say so) until you add keys.
 
-To reset the database to seed state at any time: `npm run db:reset`.
+To reset the tabs to sample data at any time: `npm run sheets:init` (it clears
+and re-seeds every tab).
 
-> Prefer SQLite for purely-local work? You can switch `provider` back to
-> `"sqlite"` in `prisma/schema.prisma` and use a single `url = env("DATABASE_URL")`
-> with `DATABASE_URL="file:./dev.db"`,
-> but Vercel's serverless filesystem is ephemeral, so production needs Postgres.
+> **Bringing your own data (e.g. an existing Excel guest list)?** Run
+> `npm run sheets:init` once to create the tabs with the right headers, then in
+> Google Sheets use **File → Import → Upload** into the matching tab (e.g.
+> *Guests*), choosing **Replace current sheet**. Keep the header row names
+> intact — the app reads columns by name. Leave the `id` column blank for new
+> rows and the app/sheet will assign ids on the next write.
 
 ## Modules
 
@@ -142,61 +159,62 @@ cron.schedule("0 18 * * 0", () => {
 ## Deploy to Vercel
 
 The repo is Vercel-ready: `vercel.json` sets the framework + cron, `next.config.ts`
-externalizes Prisma for serverless, and the `vercel-build` script runs
-`prisma generate && next build`. Database migrations are applied **out-of-band**
-(not during the build) — see step 4 below.
+keeps the Google Sheets client external for serverless, and the standard
+`next build` is all the deploy needs — no database, no migrations.
 
-1. **Database** — create a Postgres database (e.g. [Neon](https://neon.tech),
-   Supabase, or Vercel Postgres) and copy its **direct (non-pooled)** connection
-   string.
+1. **Backend** — do the Google Sheet + service-account setup from
+   [Setup (local)](#setup-local) (create the sheet, enable the Sheets API, make a
+   service account, share the sheet, run `npm run sheets:init` once).
 2. **Import the repo** into Vercel (New Project → pick this Git repo). Framework
    auto-detects as Next.js.
-3. **Set the environment variables** (Settings → Environment Variables). Add
-   `DATABASE_URL` for **all** environments (Production, Preview, **and** Development —
-   PR deploys are Preview builds):
+3. **Set the environment variables** (Settings → Environment Variables). Add the
+   three `GOOGLE_*` vars for **all** environments (Production, Preview, **and**
+   Development — PR deploys are Preview builds):
 
    | Variable | Value |
    | --- | --- |
-   | `DATABASE_URL` | your Postgres **direct** connection string (required) |
+   | `GOOGLE_SHEETS_ID` | the spreadsheet id (required) |
+   | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | the service account's `client_email` (required) |
+   | `GOOGLE_PRIVATE_KEY` | the service account's `private_key`, quoted, with literal `\n` (required) |
    | `APP_PASSWORD` / `AUTH_SECRET` | enable the shared-password gate (recommended for a public URL) |
    | `RESEND_API_KEY` | your Resend key (optional — blank disables email) |
    | `EMAIL_FROM` | verified sender, or `onboarding@resend.dev` |
    | `CRON_SECRET` | `openssl rand -hex 32` (required for the weekly digest) |
    | `VENUE_SEARCH_ENABLED` / `PLACES_API_KEY` | optional venue search |
 
-4. **Apply migrations + (optionally) seed.** The build does **not** run migrations,
-   so apply them against your database once (and again whenever the schema changes):
-   `DATABASE_URL=<url> npx prisma migrate deploy`. For sample data, also run
-   `DATABASE_URL=<url> npm run seed` (or just add your real data through the UI).
+4. **Deploy.** The build needs no data access; the app connects to the sheet at
+   request time. Add your real data through the UI, or in Google Sheets directly.
 5. The weekly digest fires Sundays 18:00 **UTC** — adjust the schedule in
    `vercel.json` for your timezone.
 
-> Note: SQLite can't be used in production — Vercel's serverless filesystem is
-> ephemeral and read-only, so the app uses Postgres everywhere.
+> Because the data lives in Google Sheets (not a file on disk), writes persist
+> fine on Vercel's ephemeral, read-only serverless filesystem.
 
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on every PR and push to `main`: it installs deps,
-generates the Prisma client, then runs **ESLint** (`npm run lint`) and a
-**TypeScript** check (`npm run typecheck`). No database is needed. Run the same
-checks locally with `npm run lint && npm run typecheck`.
+then runs **ESLint** (`npm run lint`) and a **TypeScript** check
+(`npm run typecheck`). No backend access is needed. Run the same checks locally
+with `npm run lint && npm run typecheck`.
 
 ## Costs
 
-- **Postgres (Neon / Vercel Postgres)** — both have free tiers that comfortably
-  cover a single wedding's data. Neon's free branch is enough for local + prod.
+- **Google Sheets API** — free. Generous default quotas (hundreds of reads/writes
+  per minute), far beyond what one couple's planning generates.
 - **Resend** — free tier ~3,000 emails/month (100/day), plenty for two recipients.
   No verified domain needed for the sandbox sender.
 - **Google Places API (New)** — pay-as-you-go with a recurring free credit, but
   **Text Search is billed per request** beyond the free allotment. Keep
   `VENUE_SEARCH_ENABLED="false"` to avoid any Places billing; set quotas to cap spend.
-- **Vercel / Prisma / Next.js** — Vercel's Hobby tier is free for personal projects.
+- **Vercel / Next.js** — Vercel's Hobby tier is free for personal projects.
 
 ## Environment variables
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | yes | Postgres connection string (direct/non-pooled). Used for migrations and runtime. |
+| `GOOGLE_SHEETS_ID` | yes | Id of the Google Sheet used as the backend |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | yes | Service account `client_email` (must have Editor access to the sheet) |
+| `GOOGLE_PRIVATE_KEY` | yes | Service account `private_key` (quoted, literal `\n` preserved) |
 | `APP_PASSWORD` | for the gate | Shared password; blank = app open |
 | `AUTH_SECRET` | for the gate | Signs the session cookie (`openssl rand -hex 32`) |
 | `RESEND_API_KEY` | for email | Resend API key; blank = email disabled |

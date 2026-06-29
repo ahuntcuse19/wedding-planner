@@ -1,5 +1,6 @@
-import { prisma } from "@/lib/db";
+import { getConfig, repos } from "@/lib/server/sheets";
 import { HttpError, json, withErrors } from "@/lib/server/handler";
+import type { Config, Venue } from "@/lib/types";
 
 // "Set as our venue": copy a venue's name/location into Config, mark it Booked,
 // and return a capacity warning if it can't hold the guest target. Never emails.
@@ -7,29 +8,28 @@ export const POST = withErrors(async (req: Request) => {
   const { venueId } = (await req.json().catch(() => ({}))) as { venueId?: number };
   if (!venueId) throw new HttpError(400, "venueId required.");
 
-  const venue = await prisma.venue.findUnique({ where: { id: Number(venueId) } });
+  const venue = (await repos.venue.findById(Number(venueId))) as Venue | null;
   if (!venue) throw new HttpError(404, "Venue not found.");
 
-  const config =
-    (await prisma.config.findFirst({ orderBy: { id: "asc" } })) ??
-    (await prisma.config.create({ data: { date: "", location: "", venue: "" } }));
+  const config = (await getConfig()) as unknown as Config;
 
-  // All three writes succeed or none do — never leave a half-applied "Booked"
-  // state (config updated but venue not promoted, or two venues Booked).
-  const [updatedConfig] = await prisma.$transaction([
-    prisma.config.update({
-      where: { id: config.id },
-      // Store the id (stable link) plus name/location for the header display.
-      data: { venue: venue.name, location: venue.location, chosenVenueId: venue.id },
-    }),
-    // Demote any previously-Booked venue, then promote the chosen one — only one
-    // venue should ever read as Booked.
-    prisma.venue.updateMany({
-      where: { status: "Booked", id: { not: venue.id } },
-      data: { status: "Toured" },
-    }),
-    prisma.venue.update({ where: { id: venue.id }, data: { status: "Booked" } }),
-  ]);
+  // Sheets has no transactions, so apply the writes in the order that keeps the
+  // data sensible if one fails: demote any previously-Booked venue first, then
+  // promote the chosen one, then point Config at it. Only one venue ever reads
+  // as Booked.
+  const venues = (await repos.venue.findMany()) as unknown as Venue[];
+  for (const v of venues) {
+    if (v.status === "Booked" && v.id !== venue.id) {
+      await repos.venue.update({ where: { id: v.id }, data: { status: "Toured" } });
+    }
+  }
+  await repos.venue.update({ where: { id: venue.id }, data: { status: "Booked" } });
+
+  const updatedConfig = (await repos.config.update({
+    where: { id: config.id },
+    // Store the id (stable link) plus name/location for the header display.
+    data: { venue: venue.name, location: venue.location, chosenVenueId: venue.id },
+  })) as unknown as Config;
 
   const capacityWarning =
     venue.capacity > 0 && venue.capacity < updatedConfig.guestTarget

@@ -1,5 +1,5 @@
-// Plain client-safe types mirroring the Prisma models. Components and hooks use
-// these so the client never imports the Prisma runtime.
+// Plain client-safe types describing the data model (one per spreadsheet tab).
+// Components and hooks use these so the client never imports any server code.
 
 export interface Config {
   id: number;
@@ -121,7 +121,7 @@ export const TASK_STATUSES = ["Todo", "Doing", "Done"] as const;
 export const RSVP_VALUES = ["Pending", "Yes", "No", "Maybe"] as const;
 
 // Resolve an owner sentinel to a display label using current partner names.
-// Accepts any object carrying the partner names (client Config or Prisma row).
+// Accepts any object carrying the partner names (client Config or a data row).
 type PartnerNames = { partner1Name?: string | null; partner2Name?: string | null };
 
 export function ownerLabel(value: string, config?: PartnerNames | null): string {

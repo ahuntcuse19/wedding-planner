@@ -1,6 +1,7 @@
-import { prisma } from "@/lib/db";
+import { readConfig, repos } from "@/lib/server/sheets";
 import { C } from "@/lib/theme";
 import { ownerLabel } from "@/lib/types";
+import type { BudgetLine, Config, Guest, Task, Vendor } from "@/lib/types";
 
 // Builds the weekly/manual digest from the database and renders it to HTML.
 // Pure data in, HTML out — no email sending here (see api/digest/send).
@@ -47,13 +48,13 @@ function daysBetween(fromISO: string): number | null {
 }
 
 export async function buildDigestData(): Promise<DigestData> {
-  const [config, guests, budget, tasks, vendors] = await Promise.all([
-    prisma.config.findFirst({ orderBy: { id: "asc" } }),
-    prisma.guest.findMany(),
-    prisma.budgetLine.findMany(),
-    prisma.task.findMany(),
-    prisma.vendor.findMany(),
-  ]);
+  const [config, guests, budget, tasks, vendors] = (await Promise.all([
+    readConfig(),
+    repos.guest.findMany(),
+    repos.budgetLine.findMany(),
+    repos.task.findMany(),
+    repos.vendor.findMany(),
+  ])) as unknown as [Config | null, Guest[], BudgetLine[], Task[], Vendor[]];
 
   const cfg = config ?? {
     date: "",

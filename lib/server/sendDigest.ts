@@ -1,5 +1,6 @@
 import { Resend } from "resend";
-import { prisma } from "@/lib/db";
+import { readConfig, repos } from "@/lib/server/sheets";
+import type { Config, EmailLogEntry } from "@/lib/types";
 import {
   buildDigestData,
   changesSince,
@@ -23,7 +24,7 @@ export interface SendResult {
 export async function sendDigest(
   type: "manual" | "weekly",
 ): Promise<SendResult> {
-  const config = await prisma.config.findFirst({ orderBy: { id: "asc" } });
+  const config = (await readConfig()) as Config | null;
 
   const recipients = [config?.partner1Email, config?.partner2Email]
     .map((e) => (e ?? "").trim())
@@ -41,22 +42,26 @@ export async function sendDigest(
     };
   }
 
+  const logs = (await repos.emailLog.findMany()) as unknown as EmailLogEntry[];
+
   // Guard against double-sends of the weekly digest (e.g. a retried cron tick).
   if (type === "weekly") {
-    const since = new Date(Date.now() - 20 * 3600 * 1000);
-    const recent = await prisma.emailLog.findFirst({
-      where: { type: "weekly", status: "sent", sentAt: { gte: since } },
-    });
+    const since = Date.now() - 20 * 3600 * 1000;
+    const recent = logs.find(
+      (l) =>
+        l.type === "weekly" &&
+        l.status === "sent" &&
+        new Date(l.sentAt).getTime() >= since,
+    );
     if (recent) {
       return { ok: true, status: "skipped", reason: "Weekly digest already sent today." };
     }
   }
 
   const data = await buildDigestData();
-  const last = await prisma.emailLog.findFirst({
-    where: { status: "sent" },
-    orderBy: { sentAt: "desc" },
-  });
+  const last = logs
+    .filter((l) => l.status === "sent")
+    .sort((a, b) => (a.sentAt < b.sentAt ? 1 : -1))[0];
   let prevSnapshot: Snapshot | null = null;
   if (last) {
     try {
@@ -84,7 +89,7 @@ export async function sendDigest(
     });
 
     if (error) {
-      await prisma.emailLog.create({
+      await repos.emailLog.create({
         data: {
           type,
           recipients: recipients.join(", "),
@@ -97,7 +102,7 @@ export async function sendDigest(
       return { ok: false, status: "failed", reason: String(error.message ?? error) };
     }
 
-    await prisma.emailLog.create({
+    await repos.emailLog.create({
       data: {
         type,
         recipients: recipients.join(", "),
@@ -108,7 +113,7 @@ export async function sendDigest(
     });
     return { ok: true, status: "sent", recipients, subject };
   } catch (err) {
-    await prisma.emailLog.create({
+    await repos.emailLog.create({
       data: {
         type,
         recipients: recipients.join(", "),

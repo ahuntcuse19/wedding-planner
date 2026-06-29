@@ -1,23 +1,16 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { HttpError } from "@/lib/server/errors";
 
-// Thrown by handlers to short-circuit with a specific status + payload.
-export class HttpError extends Error {
-  status: number;
-  payload: unknown;
-  constructor(status: number, message: string, payload?: unknown) {
-    super(message);
-    this.status = status;
-    this.payload = payload ?? { error: message };
-  }
-}
+// Re-exported so existing route imports (`from "@/lib/server/handler"`) keep
+// working; the class itself lives in errors.ts (no Next dependency).
+export { HttpError };
 
 export function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status });
 }
 
 // Wrap a route handler so thrown errors become clean JSON responses instead of
-// raw 500 stack traces. Prisma "record not found" maps to 404.
+// raw 500 stack traces. The data layer throws HttpError(404) for a missing row.
 export function withErrors<Args extends unknown[]>(
   fn: (...args: Args) => Promise<NextResponse>,
 ): (...args: Args) => Promise<NextResponse> {
@@ -27,12 +20,6 @@ export function withErrors<Args extends unknown[]>(
     } catch (err) {
       if (err instanceof HttpError) {
         return NextResponse.json(err.payload, { status: err.status });
-      }
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === "P2025"
-      ) {
-        return NextResponse.json({ error: "Not found." }, { status: 404 });
       }
       console.error("API error:", err);
       return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
